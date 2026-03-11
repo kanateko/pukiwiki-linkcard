@@ -31,11 +31,11 @@ jobs:
       - name: Zip dist/
         run: |
           cd dist
-          zip -r ../release.zip .
+          zip -r ../plugin.zip .
           cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release.zip
+          files: plugin.zip
           generate_release_notes: true
