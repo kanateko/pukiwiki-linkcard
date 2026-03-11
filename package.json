@@ -1,0 +1,17 @@
+{
+  "name": "pukiwiki-plugin-linkcard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PukiWiki Linkcard plugin - OGP link card generator",
+  "scripts": {
+    "build": "node scripts/build.js"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "clean-css": "^5.3.2",
+    "esbuild": "^0.27.3",
+    "postcss": "^8.4.38",
+    "sass": "^1.69.5",
+    "terser": "^5.26.0"
+  }
+}
