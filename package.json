@@ -1,6 +1,6 @@
 {
   "name": "pukiwiki-plugin-linkcard",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "description": "PukiWiki Linkcard plugin - OGP link card generator",
   "scripts": {
