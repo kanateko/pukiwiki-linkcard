@@ -287,11 +287,23 @@ EOD;
         // フォールバック時はブラウザに近いヘッダーを追加
         if ($isFallback) {
             $options[CURLOPT_HTTPHEADER] = [
-                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Accept-Language: ja,en-US;q=0.7,en;q=0.3',
-                'Cache-Control: max-age=0',
-                'Upgrade-Insecure-Requests: 1',
+                'sec-ch-ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+                'sec-ch-ua-mobile: ?0',
+                'sec-ch-ua-platform: "Windows"',
+                'upgrade-insecure-requests: 1',
+                'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'sec-fetch-site: none',
+                'sec-fetch-mode: navigate',
+                'sec-fetch-user: ?1',
+                'sec-fetch-dest: document',
+                'accept-language: ja,en-US;q=0.9,en;q=0.8',
             ];
+            // DNSの名前解決でIPv4を優先
+            $options[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
+            // 可能であればHTTP/2を使用（WAF対策）
+            if (defined('CURL_HTTP_VERSION_2_0')) {
+                $options[CURLOPT_HTTP_VERSION] = CURL_HTTP_VERSION_2_0;
+            }
         }
 
         curl_setopt_array($ch, $options);
