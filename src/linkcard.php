@@ -507,16 +507,28 @@ EOD;
         // キャッシュ削除処理
         if ($is_admin && isset($_POST['action'])) {
             if ($this->checkToken($_POST['token'] ?? '')) {
+                $msg = '';
                 if ($_POST['action'] === 'clear_cache') {
                     $this->clearCache();
-                    $success = 'キャッシュをすべて削除しました。';
+                    $msg = 'clear_success';
                 } elseif ($_POST['action'] === 'delete_cache' && isset($_POST['hash'])) {
                     $this->deleteSingleCache($_POST['hash']);
-                    $success = 'キャッシュを削除しました。';
+                    $msg = 'delete_success';
+                }
+                
+                if ($msg) {
+                    header('Location: ' . get_base_uri() . '?cmd=linkcard&msg=' . $msg);
+                    exit;
                 }
             } else {
                 $error = 'セッションがタイムアウトしました。もう一度お試しください。';
             }
+        }
+
+        // メッセージ処理
+        if (isset($_GET['msg'])) {
+            if ($_GET['msg'] === 'clear_success') $success = 'キャッシュをすべて削除しました。';
+            if ($_GET['msg'] === 'delete_success') $success = 'キャッシュを削除しました。';
         }
 
         $stats = $this->getCacheStats();
