@@ -574,7 +574,7 @@ EOD;
     {
         $script = get_base_uri();
         $token = $this->getToken();
-        $css = '<style>{css}</style>'; // ビルド時に置換される
+        $css = '<style>{css-manage}</style>'; // ビルド時に置換される
 
         $content = '';
         if (!$is_admin) {

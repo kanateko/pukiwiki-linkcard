@@ -32,8 +32,8 @@ for (const file of requiredFiles) {
 }
 
 // Compile and minify SCSS to CSS
-async function compileSCSS() {
-    const scssFile = path.join(srcDir, 'css', `${PLUGIN_NAME}.scss`);
+async function compileSCSS(fileName) {
+    const scssFile = path.join(srcDir, 'css', fileName);
 
     // 1. SCSS → CSS
     const result = sass.compile(scssFile, {
@@ -102,15 +102,16 @@ async function build() {
 
         // Step 1: Compile and minify SCSS
         console.log('Compiling SCSS...');
-        const minifiedCSS = await compileSCSS();
+        const minifiedLinkcardCSS = await compileSCSS(`${PLUGIN_NAME}.scss`);
+        const minifiedManageCSS = await compileSCSS(`${PLUGIN_NAME}-manage.scss`);
         console.log('SCSS compiled and minified successfully');
 
         // Step 2: Read JS source and inject CSS
         console.log('Processing JS...');
         let jsContent = fs.readFileSync(path.join(srcDir, 'ts', `${PLUGIN_NAME}.ts`), 'utf8');
 
-        // Inject CSS into JS
-        jsContent = jsContent.replace(/\{css\}/g, minifiedCSS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        // Inject linkcard CSS into JS
+        jsContent = jsContent.replace(/\{css\}/g, minifiedLinkcardCSS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 
         // Step 3: Strip TypeScript types using esbuild
         console.log('Stripping TypeScript types...');
@@ -125,17 +126,18 @@ async function build() {
         console.log('Minifying JS...');
         const minifiedJS = await minifyJS(jsContent);
 
-        // Step 4: Read PHP and inject JS
+        // Step 5: Read PHP and inject JS/CSS
         console.log('Building PHP...');
         const phpContent = fs.readFileSync(path.join(srcDir, `${PLUGIN_NAME}.php`), 'utf8');
-        const modifiedPhpContent = phpContent.replace(/\{js\}/g, minifiedJS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        let modifiedPhpContent = phpContent.replace(/\{js\}/g, minifiedJS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        modifiedPhpContent = modifiedPhpContent.replace(/\{css-manage\}/g, minifiedManageCSS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 
         fs.writeFileSync(path.join(distDir, `${PLUGIN_NAME}.inc.php`), modifiedPhpContent);
         console.log(`${PLUGIN_NAME}.inc.php updated in dist directory`);
 
         // Verify no placeholders remain
         const output = fs.readFileSync(path.join(distDir, `${PLUGIN_NAME}.inc.php`), 'utf8');
-        const remaining = ['{js}', '{css}'].filter(p => output.includes(p));
+        const remaining = ['{js}', '{css}', '{css-manage}'].filter(p => output.includes(p));
         if (remaining.length > 0) {
             console.error(`WARNING: Placeholders still remain: ${remaining.join(', ')}`);
         } else {
