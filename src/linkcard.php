@@ -42,38 +42,46 @@ function plugin_linkcard_convert(string ...$args): string
 }
 
 /**
- * アクション型の呼び出し（OGP取得API）
+ * アクション型の呼び出し（OGP取得API ＆ 管理画面）
  */
 function plugin_linkcard_action(): ?array
 {
-    header('Content-Type: application/json; charset=UTF-8');
-
-    // POSTリクエストのみ許可
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        echo json_encode(['status' => 'error', 'message' => 'POST method required'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
-    $url = $_POST['url'] ?? '';
-    $token = $_POST['token'] ?? '';
-
+    global $vars;
     $linkcard = new Linkcard();
 
-    // CSRFトークン検証
-    if (!$linkcard->checkToken($token)) {
-        header('HTTP/1.1 403 Forbidden');
-        echo json_encode(['status' => 'error', 'message' => 'Invalid CSRF token'], JSON_UNESCAPED_UNICODE);
+    // 管理画面の判定
+    if (isset($vars['linkcard_manage']) || (isset($vars['cmd']) && $vars['cmd'] === 'manage')) {
+        $linkcard->handleManage();
         exit;
     }
 
-    if (empty($url) || !preg_match('/^https?:\/\//', $url)) {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid URL'], JSON_UNESCAPED_UNICODE);
+    // OGP API (POST + url)
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
+        header('Content-Type: application/json; charset=UTF-8');
+
+        $url = $_POST['url'] ?? '';
+        $token = $_POST['token'] ?? '';
+
+        // CSRFトークン検証
+        if (!$linkcard->checkToken($token)) {
+            header('HTTP/1.1 403 Forbidden');
+            echo json_encode(['status' => 'error', 'message' => 'Invalid CSRF token'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if (empty($url) || !preg_match('/^https?:\/\//', $url)) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid URL'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $data = $linkcard->fetchOgp($url);
+
+        echo json_encode($data, JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    $data = $linkcard->fetchOgp($url);
-
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    header('HTTP/1.1 400 Bad Request');
+    echo 'Bad Request';
     exit;
 }
 
@@ -469,5 +477,188 @@ EOD;
                 @unlink($file);
             }
         }
+    }
+
+    /**
+     * 管理画面の処理
+     */
+    public function handleManage(): void
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        $error = '';
+        $success = '';
+
+        // ログアウト処理
+        if (isset($_GET['logout'])) {
+            unset($_SESSION['plugin_linkcard_admin']);
+            header('Location: ' . get_base_uri() . '?plugin=linkcard&cmd=manage');
+            exit;
+        }
+
+        // 認証処理
+        if (isset($_POST['pass'])) {
+            if (pkwk_login($_POST['pass'])) {
+                $_SESSION['plugin_linkcard_admin'] = true;
+                header('Location: ' . get_base_uri() . '?plugin=linkcard&cmd=manage');
+                exit;
+            } else {
+                $error = 'パスワードが違います。';
+            }
+        }
+
+        $is_admin = $_SESSION['plugin_linkcard_admin'] ?? false;
+
+        // キャッシュ削除処理
+        if ($is_admin && isset($_POST['action']) && $_POST['action'] === 'clear_cache') {
+            if ($this->checkToken($_POST['token'] ?? '')) {
+                $this->clearCache();
+                $success = 'キャッシュをすべて削除しました。';
+            } else {
+                $error = 'セッションがタイムアウトしました。もう一度お試しください。';
+            }
+        }
+
+        $stats = $this->getCacheStats();
+        $this->renderManagePage($is_admin, $stats, $error, $success);
+    }
+
+    /**
+     * キャッシュ統計の取得
+     */
+    private function getCacheStats(): array
+    {
+        $count = 0;
+        $size = 0;
+        if (is_dir(PLUGIN_LINKCARD_CACHE_DIR)) {
+            foreach (glob(PLUGIN_LINKCARD_CACHE_DIR . '*') as $file) {
+                if (is_file($file) && basename($file) !== '.htaccess') {
+                    $count++;
+                    $size += filesize($file);
+                }
+            }
+        }
+        return [
+            'count' => $count,
+            'size' => $this->formatSize($size)
+        ];
+    }
+
+    /**
+     * キャッシュの全削除
+     */
+    private function clearCache(): void
+    {
+        if (is_dir(PLUGIN_LINKCARD_CACHE_DIR)) {
+            foreach (glob(PLUGIN_LINKCARD_CACHE_DIR . '*') as $file) {
+                if (is_file($file) && basename($file) !== '.htaccess') {
+                    @unlink($file);
+                }
+            }
+        }
+    }
+
+    /**
+     * サイズのフォーマット
+     */
+    private function formatSize(int $bytes): string
+    {
+        if ($bytes >= 1048576) {
+            return number_format($bytes / 1048576, 2) . ' MB';
+        } elseif ($bytes >= 1024) {
+            return number_format($bytes / 1024, 2) . ' KB';
+        } else {
+            return $bytes . ' bytes';
+        }
+    }
+
+    /**
+     * 管理画面のレンダリング
+     */
+    private function renderManagePage(bool $is_admin, array $stats, string $error, string $success): void
+    {
+        $script = get_base_uri();
+        $token = $this->getToken();
+        $css = '<style>{css}</style>'; // ビルド時に置換される
+
+        $content = '';
+        if (!$is_admin) {
+            // ログインフォーム
+            $alert = $error ? "<div class=\"lcm-alert lcm-alert--error\">{$error}</div>" : '';
+            $content = <<<EOD
+            <div class="lcm-card">
+                {$alert}
+                <form action="{$script}?plugin=linkcard&cmd=manage" method="post" class="lcm-form">
+                    <label for="pass">管理者パスワード</label>
+                    <input type="password" name="pass" id="pass" required autofocus>
+                    <button type="submit" class="lcm-btn lcm-btn--primary">ログイン</button>
+                </form>
+            </div>
+            EOD;
+        } else {
+            // 管理機能
+            $alert = $error ? "<div class=\"lcm-alert lcm-alert--error\">{$error}</div>" : '';
+            if ($success) $alert .= "<div class=\"lcm-alert lcm-alert--success\">{$success}</div>";
+
+            $content = <<<EOD
+            <div class="lcm-stats">
+                <div class="lcm-stats__item">
+                    <div class="lcm-stats__item-label">キャッシュファイル数</div>
+                    <div class="lcm-stats__item-value">{$stats['count']}</div>
+                </div>
+                <div class="lcm-stats__item">
+                    <div class="lcm-stats__item-label">合計サイズ</div>
+                    <div class="lcm-stats__item-value">{$stats['size']}</div>
+                </div>
+            </div>
+
+            <div class="lcm-card">
+                <h3>キャッシュ管理</h3>
+                {$alert}
+                <p>現在保存されているすべてのキャッシュ（JSONおよび画像データ）を削除します。<br>
+                削除されたデータは次回のアクセス時に再度取得されます。</p>
+                <form action="{$script}?plugin=linkcard&cmd=manage" method="post" class="lcm-form" onsubmit="return confirm('本当にキャッシュをすべて削除しますか？');">
+                    <input type="hidden" name="action" value="clear_cache">
+                    <input type="hidden" name="token" value="{$token}">
+                    <button type="submit" class="lcm-btn lcm-btn--danger">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        キャッシュをすべて削除する
+                    </button>
+                </form>
+            </div>
+
+            <div style="text-align: right;">
+                <a href="{$script}?plugin=linkcard&cmd=manage&logout=1" style="font-size: 0.875rem; color: #64748b;">ログアウト</a>
+            </div>
+            EOD;
+        }
+
+        echo <<<EOD
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linkcard キャッシュ管理</title>
+    {$css}
+</head>
+<body style="background: #f1f5f9; margin: 0; padding: 0;">
+    <div class="plugin-linkcard-manage">
+        <header>
+            <h1>Linkcard キャッシュ管理</h1>
+            <p>PukiWiki Linkcard Plugin Management</p>
+        </header>
+
+        {$content}
+
+        <footer style="margin-top: 3rem; text-align: center; color: #94a3b8; font-size: 0.75rem;">
+            &copy; 2026 GamersWiki Linkcard Plugin
+        </footer>
+    </div>
+</body>
+</html>
+EOD;
     }
 }

@@ -225,6 +225,153 @@
   }
 }
 
+// ---------------------
+// 管理画面スタイル
+// ---------------------
+.plugin-linkcard-manage {
+  --lcm-bg: #f8fafc;
+  --lcm-card-bg: #ffffff;
+  --lcm-text: #1e293b;
+  --lcm-text-light: #64748b;
+  --lcm-primary: #3b82f6;
+  --lcm-primary-hover: #2563eb;
+  --lcm-danger: #ef4444;
+  --lcm-danger-hover: #dc2626;
+  --lcm-border: #e2e8f0;
+
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: var(--lcm-bg);
+  color: var(--lcm-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+  header {
+    margin-bottom: 2rem;
+    text-align: center;
+
+    h1 {
+      margin: 0;
+      font-size: 1.875rem;
+      font-weight: 700;
+      color: var(--lcm-text);
+    }
+
+    p {
+      margin-top: 0.5rem;
+      color: var(--lcm-text-light);
+    }
+  }
+
+  .lcm-card {
+    background: var(--lcm-card-bg);
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--lcm-border);
+    margin-bottom: 1.5rem;
+  }
+
+  .lcm-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+
+    &__item {
+      background: var(--lcm-card-bg);
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--lcm-border);
+      text-align: center;
+
+      &-label {
+        font-size: 0.875rem;
+        color: var(--lcm-text-light);
+        margin-bottom: 0.5rem;
+      }
+
+      &-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--lcm-primary);
+      }
+    }
+  }
+
+  .lcm-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    label {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    input[type="password"] {
+      padding: 0.625rem;
+      border: 1px solid var(--lcm-border);
+      border-radius: 6px;
+      font-size: 1rem;
+      width: 100%;
+      box-sizing: border-box;
+
+      &:focus {
+        outline: none;
+        border-color: var(--lcm-primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+    }
+
+    .lcm-btn {
+      cursor: pointer;
+      padding: 0.625rem 1.25rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+
+      &--primary {
+        background: var(--lcm-primary);
+        color: white;
+        &:hover { background: var(--lcm-primary-hover); }
+      }
+
+      &--danger {
+        background: var(--lcm-danger);
+        color: white;
+        &:hover { background: var(--lcm-danger-hover); }
+      }
+    }
+  }
+
+  .lcm-alert {
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+
+    &--error {
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fee2e2;
+    }
+
+    &--success {
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #dcfce7;
+    }
+  }
+}
+
 @keyframes linkcard-shimmer {
   0% {
     background-position: 200% 0;
