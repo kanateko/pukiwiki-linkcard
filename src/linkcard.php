@@ -543,6 +543,7 @@ EOD;
                         'site_name' => $data['site_name'] ?? '',
                         'cached_at' => $data['cached_at'] ?? '',
                         'has_image' => file_exists($imageFile),
+                        'image_url' => file_exists($imageFile) ? PLUGIN_LINKCARD_CACHE_DIR . $hash . '.webp' : '',
                         'size' => filesize($file) + (file_exists($imageFile) ? filesize($imageFile) : 0)
                     ];
                 }
@@ -650,17 +651,21 @@ EOD;
                 $site = htmlsc($item['site_name']);
                 $date = htmlsc($item['cached_at']);
                 $size = $this->formatSize($item['size']);
-                $img = $item['has_image'] ? '<span class="lcm-badge">Image</span>' : '';
+                
+                $preview = $item['has_image'] 
+                    ? '<div class="lcm-preview"><img src="' . htmlsc($item['image_url']) . '" alt="Preview" class="lcm-preview-img"></div>'
+                    : '<div class="lcm-preview lcm-preview--none">No Image</div>';
                 
                 $cacheRows .= <<<EOD
                 <tr>
+                    <td>{$preview}</td>
                     <td>
                         <div class="lcm-table-title" title="{$title}">{$title}</div>
                         <div class="lcm-table-url" title="{$url}">{$url}</div>
                     </td>
                     <td>{$site}</td>
                     <td class="lcm-nowrap">{$date}</td>
-                    <td class="lcm-nowrap">{$size} {$img}</td>
+                    <td class="lcm-nowrap">{$size}</td>
                     <td>
                         <form action="{$script}?cmd=linkcard" method="post" onsubmit="return confirm('このキャッシュを削除しますか？');">
                             <input type="hidden" name="action" value="delete_cache">
@@ -676,7 +681,7 @@ EOD;
             }
 
             if (empty($cacheRows)) {
-                $cacheRows = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: #94a3b8;">キャッシュはありません</td></tr>';
+                $cacheRows = '<tr><td colspan="6" style="text-align:center; padding: 2rem; color: #94a3b8;">キャッシュはありません</td></tr>';
             }
 
             $content = <<<EOD
@@ -698,6 +703,7 @@ EOD;
                     <table class="lcm-table">
                         <thead>
                             <tr>
+                                <th>画像</th>
                                 <th>ページ情報</th>
                                 <th>サイト名</th>
                                 <th>取得日時</th>
