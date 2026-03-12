@@ -14,7 +14,7 @@ define('PLUGIN_LINKCARD_CACHE_DIR', CACHE_DIR . 'linkcard/');
 define('PLUGIN_LINKCARD_CACHE_EXPIRE', 604800); // 7日間（秒）
 define('PLUGIN_LINKCARD_IMAGE_WIDTH', 240);
 define('PLUGIN_LINKCARD_IMAGE_HEIGHT', 126);
-define('PLUGIN_LINKCARD_UA', 'Mozilla/5.0 (compatible; PukiWiki LinkCard;)');
+define('PLUGIN_LINKCARD_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 define('PLUGIN_LINKCARD_TIMEOUT', 10);
 define('PLUGIN_LINKCARD_MAX_HTML_SIZE', 2097152); // 2MB
 define('PLUGIN_LINKCARD_MAX_IMAGE_SIZE', 10485760); // 10MB
