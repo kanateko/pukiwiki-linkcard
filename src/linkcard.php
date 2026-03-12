@@ -653,7 +653,9 @@ EOD;
         if (is_dir(PLUGIN_LINKCARD_CACHE_DIR)) {
             foreach (glob(PLUGIN_LINKCARD_CACHE_DIR . '*') as $file) {
                 if (is_file($file) && basename($file) !== '.htaccess') {
-                    $count++;
+                    if (str_ends_with($file, '.json')) {
+                        $count++;
+                    }
                     $size += filesize($file);
                 }
             }
