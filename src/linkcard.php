@@ -46,16 +46,9 @@ function plugin_linkcard_convert(string ...$args): string
  */
 function plugin_linkcard_action(): ?array
 {
-    global $vars;
     $linkcard = new Linkcard();
 
-    // 管理画面の判定
-    if (isset($vars['linkcard_manage']) || (isset($vars['cmd']) && $vars['cmd'] === 'manage')) {
-        $linkcard->handleManage();
-        exit;
-    }
-
-    // OGP API (POST + url)
+    // POSTでurlが指定されている場合はOGP取得APIとして動作
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
         header('Content-Type: application/json; charset=UTF-8');
 
@@ -80,8 +73,8 @@ function plugin_linkcard_action(): ?array
         exit;
     }
 
-    header('HTTP/1.1 400 Bad Request');
-    echo 'Bad Request';
+    // それ以外はすべて管理画面として扱う（GETリクエストやPOSTでの管理操作など）
+    $linkcard->handleManage();
     exit;
 }
 
@@ -494,7 +487,7 @@ EOD;
         // ログアウト処理
         if (isset($_GET['logout'])) {
             unset($_SESSION['plugin_linkcard_admin']);
-            header('Location: ' . get_base_uri() . '?plugin=linkcard&cmd=manage');
+            header('Location: ' . get_base_uri() . '?cmd=linkcard');
             exit;
         }
 
@@ -502,7 +495,7 @@ EOD;
         if (isset($_POST['pass'])) {
             if (pkwk_login($_POST['pass'])) {
                 $_SESSION['plugin_linkcard_admin'] = true;
-                header('Location: ' . get_base_uri() . '?plugin=linkcard&cmd=manage');
+                header('Location: ' . get_base_uri() . '?cmd=linkcard');
                 exit;
             } else {
                 $error = 'パスワードが違います。';
@@ -590,7 +583,7 @@ EOD;
             $content = <<<EOD
             <div class="lcm-card">
                 {$alert}
-                <form action="{$script}?plugin=linkcard&cmd=manage" method="post" class="lcm-form">
+                <form action="{$script}?cmd=linkcard" method="post" class="lcm-form">
                     <label for="pass">管理者パスワード</label>
                     <input type="password" name="pass" id="pass" required autofocus>
                     <button type="submit" class="lcm-btn lcm-btn--primary">ログイン</button>
@@ -619,7 +612,7 @@ EOD;
                 {$alert}
                 <p>現在保存されているすべてのキャッシュ（JSONおよび画像データ）を削除します。<br>
                 削除されたデータは次回のアクセス時に再度取得されます。</p>
-                <form action="{$script}?plugin=linkcard&cmd=manage" method="post" class="lcm-form" onsubmit="return confirm('本当にキャッシュをすべて削除しますか？');">
+                <form action="{$script}?cmd=linkcard" method="post" class="lcm-form" onsubmit="return confirm('本当にキャッシュをすべて削除しますか？');">
                     <input type="hidden" name="action" value="clear_cache">
                     <input type="hidden" name="token" value="{$token}">
                     <button type="submit" class="lcm-btn lcm-btn--danger">
@@ -630,7 +623,7 @@ EOD;
             </div>
 
             <div style="text-align: right;">
-                <a href="{$script}?plugin=linkcard&cmd=manage&logout=1" style="font-size: 0.875rem; color: #64748b;">ログアウト</a>
+                <a href="{$script}?cmd=linkcard&logout=1" style="font-size: 0.875rem; color: #64748b;">ログアウト</a>
             </div>
             EOD;
         }
