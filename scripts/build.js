@@ -125,10 +125,11 @@ async function build() {
         console.log('Minifying JS...');
         const minifiedJS = await minifyJS(jsContent);
 
-        // Step 4: Read PHP and inject JS
+        // Step 4: Read PHP and inject JS/CSS
         console.log('Building PHP...');
         const phpContent = fs.readFileSync(path.join(srcDir, `${PLUGIN_NAME}.php`), 'utf8');
-        const modifiedPhpContent = phpContent.replace(/\{js\}/g, minifiedJS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        let modifiedPhpContent = phpContent.replace(/\{js\}/g, minifiedJS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        modifiedPhpContent = modifiedPhpContent.replace(/\{css\}/g, minifiedCSS.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 
         fs.writeFileSync(path.join(distDir, `${PLUGIN_NAME}.inc.php`), modifiedPhpContent);
         console.log(`${PLUGIN_NAME}.inc.php updated in dist directory`);
