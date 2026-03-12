@@ -15,6 +15,7 @@ define('PLUGIN_LINKCARD_CACHE_EXPIRE', 604800); // 7日間（秒）
 define('PLUGIN_LINKCARD_IMAGE_WIDTH', 240);
 define('PLUGIN_LINKCARD_IMAGE_HEIGHT', 126);
 define('PLUGIN_LINKCARD_UA', 'Mozilla/5.0 (compatible; PukiWiki LinkCard;)');
+define('PLUGIN_LINKCARD_UA_FALLBACK', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 define('PLUGIN_LINKCARD_TIMEOUT', 10);
 define('PLUGIN_LINKCARD_MAX_HTML_SIZE', 2097152); // 2MB
 define('PLUGIN_LINKCARD_MAX_IMAGE_SIZE', 10485760); // 10MB
@@ -174,10 +175,11 @@ class Linkcard
         }
 
         // OGP取得
-        $html = $this->fetchHtml($url);
-        if ($html === false) {
-            return ['status' => 'error', 'message' => 'Failed to fetch URL'];
+        $fetchResult = $this->fetchHtml($url);
+        if ($fetchResult['html'] === false) {
+            return ['status' => 'error', 'message' => 'Failed to fetch URL: ' . $fetchResult['error']];
         }
+        $html = $fetchResult['html'];
 
         $ogp = $this->parseOgp($html, $url);
 
@@ -226,32 +228,34 @@ EOD;
     /**
      * cURLでHTMLを取得
      */
-    private function fetchHtml(string $url): string|false
+    private function fetchHtml(string $url): array
     {
         if (!$this->isSafeUrl($url)) {
-            return false;
+            return ['html' => false, 'error' => 'Unsafe URL'];
         }
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 5,
-            CURLOPT_TIMEOUT => PLUGIN_LINKCARD_TIMEOUT,
-            CURLOPT_USERAGENT => PLUGIN_LINKCARD_UA,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXFILESIZE => PLUGIN_LINKCARD_MAX_HTML_SIZE,
-        ]);
+        // 1回目の試行（デフォルトUA）
+        $result = $this->executeCurl($url, PLUGIN_LINKCARD_UA, false);
 
-        $html = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($html === false || $httpCode >= 400) {
-            return false;
+        // 失敗した場合、フォールバックUAで2回目の試行
+        if ($result['html'] === false || $result['http_code'] >= 400) {
+            $fallbackResult = $this->executeCurl($url, PLUGIN_LINKCARD_UA_FALLBACK, true);
+            // 2回目が成功した、あるいはステータスコードが改善した場合はそちらを採用
+            if ($fallbackResult['html'] !== false && $fallbackResult['http_code'] < 400) {
+                $result = $fallbackResult;
+            } else {
+                // 両方失敗した場合は、最初のエラーまたはより具体的なエラーを返す
+                if ($result['html'] === false) {
+                    $result['error'] = $result['error'] ?: 'HTTP ' . $result['http_code'];
+                }
+            }
         }
+
+        if ($result['html'] === false) {
+            return ['html' => false, 'error' => $result['error']];
+        }
+
+        $html = $result['html'];
 
         // 文字コード変換
         $encoding = mb_detect_encoding($html, ['UTF-8', 'EUC-JP', 'SJIS', 'JIS', 'ASCII', 'ISO-8859-1'], true);
@@ -259,7 +263,49 @@ EOD;
             $html = mb_convert_encoding($html, 'UTF-8', $encoding);
         }
 
-        return $html;
+        return ['html' => $html, 'error' => ''];
+    }
+
+    /**
+     * cURL実行の共通処理
+     */
+    private function executeCurl(string $url, string $ua, bool $isFallback): array
+    {
+        $ch = curl_init();
+        $options = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_TIMEOUT => PLUGIN_LINKCARD_TIMEOUT,
+            CURLOPT_USERAGENT => $ua,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXFILESIZE => PLUGIN_LINKCARD_MAX_HTML_SIZE,
+        ];
+
+        // フォールバック時はブラウザに近いヘッダーを追加
+        if ($isFallback) {
+            $options[CURLOPT_HTTPHEADER] = [
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language: ja,en-US;q=0.7,en;q=0.3',
+                'Cache-Control: max-age=0',
+                'Upgrade-Insecure-Requests: 1',
+            ];
+        }
+
+        curl_setopt_array($ch, $options);
+
+        $html = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        return [
+            'html' => ($httpCode >= 200 && $httpCode < 400) ? $html : false,
+            'http_code' => $httpCode,
+            'error' => $error ?: ($httpCode >= 400 ? 'HTTP ' . $httpCode : '')
+        ];
     }
 
     /**
