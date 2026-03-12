@@ -3,7 +3,7 @@
  * Linkcard プラグイン
  * 外部リンクからOGP情報を非同期で取得し、リンクカードとして表示する
  *
- * @version 1.0.1
+ * @version 1.0.2
  * @author kanateko
  * @link https://github.com/kanateko/pukiwiki-linkcard
  * @license https://www.gnu.org/licenses/gpl-3.0.html GPLv3 or later
@@ -51,13 +51,22 @@ function plugin_linkcard_action(): array
     }
 
     $url = $_POST['url'] ?? '';
+    $token = $_POST['token'] ?? '';
+
+    $linkcard = new Linkcard();
+
+    // CSRFトークン検証
+    if (!$linkcard->checkToken($token)) {
+        header('HTTP/1.1 403 Forbidden');
+        echo json_encode(['status' => 'error', 'message' => 'Invalid CSRF token'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
     if (empty($url) || !preg_match('/^https?:\/\//', $url)) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid URL'], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    $linkcard = new Linkcard();
     $data = $linkcard->fetchOgp($url);
 
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
@@ -77,11 +86,12 @@ class Linkcard
     public function render(string $url): string
     {
         $escapedUrl = htmlsc($url);
+        $token = $this->getToken();
         $isDark = defined('PKWK_SKIN_DARK_THEME') && PKWK_SKIN_DARK_THEME ? ' plugin-linkcard--dark' : '';
         $assets = $this->loadAssets();
 
         return <<<EOD
-        <div class="plugin-linkcard{$isDark}" data-url="{$escapedUrl}">
+        <div class="plugin-linkcard{$isDark}" data-url="{$escapedUrl}" data-token="{$token}">
             <div class="plugin-linkcard__skeleton">
                 <div class="plugin-linkcard__skeleton-body">
                     <div class="plugin-linkcard__skeleton-title"></div>
@@ -104,6 +114,35 @@ class Linkcard
         self::$assetsLoaded = true;
 
         return '<script type="module">{js}</script>';
+    }
+
+    /**
+     * セッションを開始し、CSRFトークンを取得
+     */
+    private function getToken(): string
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        if (empty($_SESSION['plugin_linkcard_token'])) {
+            $_SESSION['plugin_linkcard_token'] = bin2hex(random_bytes(32));
+        }
+
+        return $_SESSION['plugin_linkcard_token'];
+    }
+
+    /**
+     * トークンの検証
+     */
+    public function checkToken(string $token): bool
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        $sessionToken = $_SESSION['plugin_linkcard_token'] ?? '';
+        return !empty($token) && hash_equals($sessionToken, $token);
     }
 
     /**
