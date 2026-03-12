@@ -3,7 +3,7 @@
  * Linkcard プラグイン
  * 外部リンクからOGP情報を非同期で取得し、リンクカードとして表示する
  *
- * @version 1.2.0
+ * @version 1.2.1
  * @author kanateko
  * @link https://github.com/kanateko/pukiwiki-linkcard
  * @license https://www.gnu.org/licenses/gpl-3.0.html GPLv3 or later
