@@ -23,9 +23,10 @@ interface OgpData {
   /**
    * OGPデータをPOSTで取得
    */
-  async function fetchOgpData(url: string): Promise<OgpData> {
+  async function fetchOgpData(url: string, token: string): Promise<OgpData> {
     const params = new URLSearchParams();
     params.set('url', url);
+    params.set('token', token);
 
     const response = await fetch('?plugin=linkcard', {
       method: 'POST',
@@ -108,10 +109,11 @@ interface OgpData {
       while (index < cards.length) {
         const card = cards[index++];
         const url = card.dataset.url;
+        const token = card.dataset.token || '';
         if (!url) continue;
 
         try {
-          const data = await fetchOgpData(url);
+          const data = await fetchOgpData(url, token);
           if (data.status === 'ok') {
             buildCard(card, data);
           } else {
