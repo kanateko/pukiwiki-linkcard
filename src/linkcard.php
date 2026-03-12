@@ -3,7 +3,7 @@
  * Linkcard プラグイン
  * 外部リンクからOGP情報を非同期で取得し、リンクカードとして表示する
  *
- * @version 1.0.2
+ * @version 1.1.0
  * @author kanateko
  * @link https://github.com/kanateko/pukiwiki-linkcard
  * @license https://www.gnu.org/licenses/gpl-3.0.html GPLv3 or later
@@ -14,8 +14,12 @@ define('PLUGIN_LINKCARD_CACHE_DIR', CACHE_DIR . 'linkcard/');
 define('PLUGIN_LINKCARD_CACHE_EXPIRE', 604800); // 7日間（秒）
 define('PLUGIN_LINKCARD_IMAGE_WIDTH', 240);
 define('PLUGIN_LINKCARD_IMAGE_HEIGHT', 126);
-define('PLUGIN_LINKCARD_UA', 'Mozilla/5.0 (compatible; PukiWiki LinkCard;)');
+define('PLUGIN_LINKCARD_UA', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 define('PLUGIN_LINKCARD_TIMEOUT', 10);
+define('PLUGIN_LINKCARD_MAX_HTML_SIZE', 2097152); // 2MB
+define('PLUGIN_LINKCARD_MAX_IMAGE_SIZE', 10485760); // 10MB
+define('PLUGIN_LINKCARD_GC_PROBABILITY', 100); // 1/100
+define('PLUGIN_LINKCARD_CACHE_MAX_DAYS', 30);
 
 /**
  * ブロック型の呼び出し
@@ -40,7 +44,7 @@ function plugin_linkcard_convert(string ...$args): string
 /**
  * アクション型の呼び出し（OGP取得API）
  */
-function plugin_linkcard_action(): array
+function plugin_linkcard_action(): ?array
 {
     header('Content-Type: application/json; charset=UTF-8');
 
@@ -150,6 +154,7 @@ class Linkcard
      */
     public function fetchOgp(string $url): array
     {
+        $this->garbageCollect();
         $this->ensureCacheDir();
         $hash = md5($url);
         $cacheFile = PLUGIN_LINKCARD_CACHE_DIR . $hash . '.json';
@@ -219,6 +224,10 @@ EOD;
      */
     private function fetchHtml(string $url): string|false
     {
+        if (!$this->isSafeUrl($url)) {
+            return false;
+        }
+
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
@@ -229,6 +238,7 @@ EOD;
             CURLOPT_USERAGENT => PLUGIN_LINKCARD_UA,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_ENCODING => '',
+            CURLOPT_MAXFILESIZE => PLUGIN_LINKCARD_MAX_HTML_SIZE,
         ]);
 
         $html = curl_exec($ch);
@@ -343,6 +353,10 @@ EOD;
      */
     private function cacheImage(string $imageUrl, string $savePath): void
     {
+        if (!$this->isSafeUrl($imageUrl)) {
+            return;
+        }
+
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $imageUrl,
@@ -352,6 +366,7 @@ EOD;
             CURLOPT_TIMEOUT => PLUGIN_LINKCARD_TIMEOUT,
             CURLOPT_USERAGENT => PLUGIN_LINKCARD_UA,
             CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_MAXFILESIZE => PLUGIN_LINKCARD_MAX_IMAGE_SIZE,
         ]);
 
         $imageData = curl_exec($ch);
@@ -405,5 +420,54 @@ EOD;
         imagedestroy($src);
         imagedestroy($resized);
         imagedestroy($cropped);
+    }
+
+    /**
+     * URLが安全かどうか（SSRF対策：プライベートIPへのアクセス禁止）
+     */
+    private function isSafeUrl(string $url): bool
+    {
+        $parsed = parse_url($url);
+        if (!isset($parsed['host'])) {
+            return false;
+        }
+
+        $host = $parsed['host'];
+        $ip = gethostbyname($host);
+
+        if ($ip === $host && !filter_var($host, FILTER_VALIDATE_IP)) {
+            // DNSの名前解決に失敗
+            return false;
+        }
+
+        // プライベートIPアドレスとループバックアドレスをチェック
+        $isPrivate = !filter_var(
+            $ip,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        );
+
+        return !$isPrivate;
+    }
+
+    /**
+     * 古いキャッシュの削除 (GC)
+     */
+    private function garbageCollect(): void
+    {
+        if (rand(1, PLUGIN_LINKCARD_GC_PROBABILITY) !== 1) {
+            return;
+        }
+
+        if (!is_dir(PLUGIN_LINKCARD_CACHE_DIR)) {
+            return;
+        }
+
+        $expire = time() - (PLUGIN_LINKCARD_CACHE_MAX_DAYS * 86400);
+        foreach (glob(PLUGIN_LINKCARD_CACHE_DIR . '*') as $file) {
+            if (is_file($file) && filemtime($file) < $expire) {
+                @unlink($file);
+            }
+        }
     }
 }
