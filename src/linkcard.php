@@ -505,17 +505,65 @@ EOD;
         $is_admin = $_SESSION['plugin_linkcard_admin'] ?? false;
 
         // キャッシュ削除処理
-        if ($is_admin && isset($_POST['action']) && $_POST['action'] === 'clear_cache') {
+        if ($is_admin && isset($_POST['action'])) {
             if ($this->checkToken($_POST['token'] ?? '')) {
-                $this->clearCache();
-                $success = 'キャッシュをすべて削除しました。';
+                if ($_POST['action'] === 'clear_cache') {
+                    $this->clearCache();
+                    $success = 'キャッシュをすべて削除しました。';
+                } elseif ($_POST['action'] === 'delete_cache' && isset($_POST['hash'])) {
+                    $this->deleteSingleCache($_POST['hash']);
+                    $success = 'キャッシュを削除しました。';
+                }
             } else {
                 $error = 'セッションがタイムアウトしました。もう一度お試しください。';
             }
         }
 
         $stats = $this->getCacheStats();
-        $this->renderManagePage($is_admin, $stats, $error, $success);
+        $cacheList = $is_admin ? $this->getCacheList() : [];
+        $this->renderManagePage($is_admin, $stats, $cacheList, $error, $success);
+    }
+
+    /**
+     * キャッシュリストの取得
+     */
+    private function getCacheList(): array
+    {
+        $list = [];
+        if (is_dir(PLUGIN_LINKCARD_CACHE_DIR)) {
+            foreach (glob(PLUGIN_LINKCARD_CACHE_DIR . '*.json') as $file) {
+                $data = json_decode(file_get_contents($file), true);
+                if ($data) {
+                    $hash = basename($file, '.json');
+                    $imageFile = PLUGIN_LINKCARD_CACHE_DIR . $hash . '.webp';
+                    $list[] = [
+                        'hash' => $hash,
+                        'url' => $data['url'] ?? '',
+                        'title' => $data['title'] ?? '',
+                        'site_name' => $data['site_name'] ?? '',
+                        'cached_at' => $data['cached_at'] ?? '',
+                        'has_image' => file_exists($imageFile),
+                        'size' => filesize($file) + (file_exists($imageFile) ? filesize($imageFile) : 0)
+                    ];
+                }
+            }
+        }
+        // 新しい順にソート
+        usort($list, function ($a, $b) {
+            return strcmp($b['cached_at'], $a['cached_at']);
+        });
+        return $list;
+    }
+
+    /**
+     * 個別キャッシュの削除
+     */
+    private function deleteSingleCache(string $hash): void
+    {
+        $json = PLUGIN_LINKCARD_CACHE_DIR . $hash . '.json';
+        $image = PLUGIN_LINKCARD_CACHE_DIR . $hash . '.webp';
+        if (file_exists($json)) @unlink($json);
+        if (file_exists($image)) @unlink($image);
     }
 
     /**
@@ -570,7 +618,7 @@ EOD;
     /**
      * 管理画面のレンダリング
      */
-    private function renderManagePage(bool $is_admin, array $stats, string $error, string $success): void
+    private function renderManagePage(bool $is_admin, array $stats, array $cacheList, string $error, string $success): void
     {
         $script = get_base_uri();
         $token = $this->getToken();
@@ -595,6 +643,42 @@ EOD;
             $alert = $error ? "<div class=\"lcm-alert lcm-alert--error\">{$error}</div>" : '';
             if ($success) $alert .= "<div class=\"lcm-alert lcm-alert--success\">{$success}</div>";
 
+            $cacheRows = '';
+            foreach ($cacheList as $item) {
+                $title = htmlsc($item['title']);
+                $url = htmlsc($item['url']);
+                $site = htmlsc($item['site_name']);
+                $date = htmlsc($item['cached_at']);
+                $size = $this->formatSize($item['size']);
+                $img = $item['has_image'] ? '<span class="lcm-badge">Image</span>' : '';
+                
+                $cacheRows .= <<<EOD
+                <tr>
+                    <td>
+                        <div class="lcm-table-title" title="{$title}">{$title}</div>
+                        <div class="lcm-table-url" title="{$url}">{$url}</div>
+                    </td>
+                    <td>{$site}</td>
+                    <td class="lcm-nowrap">{$date}</td>
+                    <td class="lcm-nowrap">{$size} {$img}</td>
+                    <td>
+                        <form action="{$script}?cmd=linkcard" method="post" onsubmit="return confirm('このキャッシュを削除しますか？');">
+                            <input type="hidden" name="action" value="delete_cache">
+                            <input type="hidden" name="hash" value="{$item['hash']}">
+                            <input type="hidden" name="token" value="{$token}">
+                            <button type="submit" class="lcm-btn-icon" title="削除">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                EOD;
+            }
+
+            if (empty($cacheRows)) {
+                $cacheRows = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: #94a3b8;">キャッシュはありません</td></tr>';
+            }
+
             $content = <<<EOD
             <div class="lcm-stats">
                 <div class="lcm-stats__item">
@@ -608,18 +692,37 @@ EOD;
             </div>
 
             <div class="lcm-card">
-                <h3>キャッシュ管理</h3>
+                <h3>キャッシュ詳細</h3>
                 {$alert}
-                <p>現在保存されているすべてのキャッシュ（JSONおよび画像データ）を削除します。<br>
-                削除されたデータは次回のアクセス時に再度取得されます。</p>
-                <form action="{$script}?cmd=linkcard" method="post" class="lcm-form" onsubmit="return confirm('本当にキャッシュをすべて削除しますか？');">
-                    <input type="hidden" name="action" value="clear_cache">
-                    <input type="hidden" name="token" value="{$token}">
-                    <button type="submit" class="lcm-btn lcm-btn--danger">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        キャッシュをすべて削除する
-                    </button>
-                </form>
+                <div class="lcm-table-wrapper">
+                    <table class="lcm-table">
+                        <thead>
+                            <tr>
+                                <th>ページ情報</th>
+                                <th>サイト名</th>
+                                <th>取得日時</th>
+                                <th>サイズ</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {$cacheRows}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--lcm-border);">
+                    <h4>一括操作</h4>
+                    <p style="font-size: 0.875rem; color: #64748b;">現在保存されているすべてのキャッシュ（JSONおよび画像データ）を削除します。</p>
+                    <form action="{$script}?cmd=linkcard" method="post" class="lcm-form" onsubmit="return confirm('本当にキャッシュをすべて削除しますか？');">
+                        <input type="hidden" name="action" value="clear_cache">
+                        <input type="hidden" name="token" value="{$token}">
+                        <button type="submit" class="lcm-btn lcm-btn--outline-danger" style="align-self: flex-start; width: auto;">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            キャッシュをすべて削除する
+                        </button>
+                    </form>
+                </div>
             </div>
 
             <div style="text-align: right;">
