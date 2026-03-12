@@ -62,6 +62,9 @@ function plugin_linkcard_action(): ?array
             exit;
         }
 
+        // セッションロックを解放して並列リクエストを許可
+        session_write_close();
+
         if (empty($url) || !preg_match('/^https?:\/\//', $url)) {
             echo json_encode(['status' => 'error', 'message' => 'Invalid URL'], JSON_UNESCAPED_UNICODE);
             exit;
