@@ -517,7 +517,8 @@ EOD;
                 }
                 
                 if ($msg) {
-                    header('Location: ' . get_base_uri() . '?cmd=linkcard&lcm_msg=' . $msg);
+                    $_SESSION['plugin_linkcard_msg'] = $msg;
+                    header('Location: ' . get_base_uri() . '?cmd=linkcard');
                     exit;
                 }
             } else {
@@ -526,9 +527,11 @@ EOD;
         }
 
         // メッセージ処理
-        if (isset($_GET['lcm_msg'])) {
-            if ($_GET['lcm_msg'] === 'clear_success') $success = 'キャッシュをすべて削除しました。';
-            if ($_GET['lcm_msg'] === 'delete_success') $success = 'キャッシュを削除しました。';
+        if (isset($_SESSION['plugin_linkcard_msg'])) {
+            $msg = $_SESSION['plugin_linkcard_msg'];
+            if ($msg === 'clear_success') $success = 'キャッシュをすべて削除しました。';
+            if ($msg === 'delete_success') $success = 'キャッシュを削除しました。';
+            unset($_SESSION['plugin_linkcard_msg']);
         }
 
         $stats = $this->getCacheStats();
