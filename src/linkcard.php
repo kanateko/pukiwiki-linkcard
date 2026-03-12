@@ -813,6 +813,10 @@ EOD;
             EOD;
         }
 
+        $isDark = defined('PKWK_SKIN_DARK_THEME') && PKWK_SKIN_DARK_THEME;
+        $themeClass = $isDark ? ' plugin-linkcard-manage--dark' : '';
+        $bodyBg = $isDark ? '#0f172a' : '#f1f5f9';
+
         echo <<<EOD
 <!DOCTYPE html>
 <html lang="ja">
@@ -822,8 +826,8 @@ EOD;
     <title>Linkcard キャッシュ管理</title>
     {$css}
 </head>
-<body style="background: #f1f5f9; margin: 0; padding: 0;">
-    <div class="plugin-linkcard-manage">
+<body style="background: {$bodyBg}; margin: 0; padding: 0;">
+    <div class="plugin-linkcard-manage{$themeClass}">
         <header>
             <h1>Linkcard キャッシュ管理</h1>
             <p>PukiWiki Linkcard Plugin Management</p>
